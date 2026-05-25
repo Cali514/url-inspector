@@ -7,9 +7,10 @@ import type { FileNode } from '../types';
 
 interface CodeViewerProps {
   file: FileNode | null;
+  collapsed?: boolean;
 }
 
-export default function CodeViewer({ file }: CodeViewerProps) {
+export default function CodeViewer({ file, collapsed = false }: CodeViewerProps) {
   const codeRef = useRef<HTMLElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -38,6 +39,22 @@ export default function CodeViewer({ file }: CodeViewerProps) {
   };
 
   const lines = content.split('\n');
+
+  if (collapsed) {
+    return (
+      <div className="code-viewer collapsed">
+        <div className="pane-header">
+          <div className="header-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+            <span>{file?.name || 'Code Viewer'}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!file) {
     return (

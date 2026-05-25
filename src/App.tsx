@@ -3,7 +3,7 @@ import Header from './components/Header';
 import FileTree from './components/FileTree';
 import CodeViewer from './components/CodeViewer';
 import ComponentTree from './components/ComponentTree';
-import CssInspector from './components/CssInspector';
+import DesignTool from './components/DesignTool';
 import ResizableSplit from './components/ResizableSplit';
 import type { FileNode, ComponentNode, ViewportMode, ParsedResult } from './types';
 import { fetchUrl, parseHtml, buildFileTree } from './utils/api';
@@ -90,18 +90,18 @@ export default function App() {
       <div className="workspace">
         <ResizableSplit
           direction="horizontal"
-          initialSizes={[0.2, 0.45, 0.35]}
-          minSizes={[0.12, 0.2, 0.15]}
+          initialSizes={selectedComponent ? [0.2, 0.03, 0.77] : [0.2, 0.45, 0.35]}
+          minSizes={[0.12, 0.02, 0.15]}
         >
           <FileTree
             files={files}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
           />
-          <CodeViewer file={selectedFile} />
+          <CodeViewer file={selectedFile} collapsed={!!selectedComponent} />
           <ResizableSplit
             direction="vertical"
-            initialSizes={[0.6, 0.4]}
+            initialSizes={[0.55, 0.45]}
             minSizes={[0.2, 0.15]}
             className="right-column-split"
           >
@@ -110,7 +110,7 @@ export default function App() {
               selectedId={selectedComponent?.id ?? null}
               onSelect={setSelectedComponent}
             />
-            <CssInspector selectedNode={selectedComponent} />
+            <DesignTool selectedNode={selectedComponent} />
           </ResizableSplit>
         </ResizableSplit>
       </div>
