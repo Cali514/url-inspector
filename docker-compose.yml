@@ -1,0 +1,19 @@
+services:
+  url-inspector:
+    image: ghcr.io/cali514/url-inspector:latest
+    container_name: url-inspector
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.url-inspector.rule=Host(`inspector.cali514.ca`)
+      - traefik.http.routers.url-inspector.entrypoints=websecure
+      - traefik.http.routers.url-inspector.tls.certresolver=letsencrypt
+      - traefik.http.services.url-inspector.loadbalancer.server.port=3000
+    networks:
+      - traefik-proxy
+
+networks:
+  traefik-proxy:
+    external: true
