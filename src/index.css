@@ -704,6 +704,12 @@ body {
   background: var(--bg-active);
   border-left-color: var(--accent-sky);
 }
+.comp-item.dimmed {
+  opacity: 0.35;
+}
+.comp-item.dimmed:hover {
+  opacity: 0.7;
+}
 
 .text-node {
   color: var(--text-muted);

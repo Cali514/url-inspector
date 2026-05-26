@@ -4,13 +4,12 @@ import type { ComponentNode } from '../types';
 interface ComponentTreeProps {
   tree: ComponentNode[];
   selectedId: string | null;
-  onSelect: (node: ComponentNode) => void;
+  onSelect: (node: ComponentNode | null) => void;
 }
 
-// Build a Set of node IDs that are on the path from root to the selected node
+// Build a Set of node IDs on the path from root to the selected node
 function findAncestorPath(tree: ComponentNode[], targetId: string): Set<string> {
   const path = new Set<string>();
-
   function walk(nodes: ComponentNode[]): boolean {
     for (const node of nodes) {
       if (node.id === targetId) {
@@ -24,12 +23,11 @@ function findAncestorPath(tree: ComponentNode[], targetId: string): Set<string> 
     }
     return false;
   }
-
   walk(tree);
   return path;
 }
 
-// Find a node and its parent in the tree
+// Find a node and its parent
 function findNodeAndParent(
   nodes: ComponentNode[],
   targetId: string,
@@ -56,52 +54,56 @@ function ComponentNodeItem({
   node: ComponentNode;
   depth: number;
   selectedId: string | null;
-  onSelect: (node: ComponentNode) => void;
+  onSelect: (node: ComponentNode | null) => void;
   ancestorPath: Set<string>;
   focused: boolean;
 }) {
-  // In focused mode, only nodes on the ancestor path stay open
   const isInPath = ancestorPath.has(node.id);
-  const [isOpen, setIsOpen] = useState(depth < 3);
-
-  // Sync open state when focus mode changes
-  useEffect(() => {
-    if (focused) {
-      setIsOpen(isInPath);
-    }
-  }, [focused, isInPath]);
-
   const isSelected = selectedId === node.id;
   const hasChildren = node.children && node.children.length > 0;
 
-  // In focused mode, skip rendering nodes not on the path
-  if (focused && !isInPath) {
-    return null;
-  }
+  // Default open for shallow nodes; when focused, only path nodes are open
+  const [isOpen, setIsOpen] = useState(depth < 3);
+
+  // Sync open state when ancestor path changes
+  useEffect(() => {
+    if (focused) {
+      // Expand nodes on the path, collapse others
+      setIsOpen(isInPath);
+    }
+  }, [focused, isInPath, node.id]);
 
   const getTagColor = (tag: string) => {
     if (tag.startsWith('#')) return '#94a3b8';
     const htmlTags = ['html', 'head', 'body', 'div', 'span', 'p', 'a', 'img', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'main', 'section', 'article', 'nav', 'header', 'footer', 'aside'];
     const formTags = ['form', 'input', 'button', 'select', 'textarea', 'label'];
     const tableTags = ['table', 'thead', 'tbody', 'tr', 'td', 'th'];
-
     if (htmlTags.includes(tag.toLowerCase())) return '#34d399';
     if (formTags.includes(tag.toLowerCase())) return '#f472b6';
     if (tableTags.includes(tag.toLowerCase())) return '#a78bfa';
     return '#38bdf8';
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (hasChildren) {
       setIsOpen(!isOpen);
     }
-    onSelect(node);
+    // Toggle: clicking the already-selected node deselects it
+    if (isSelected) {
+      onSelect(null);
+    } else {
+      onSelect(node);
+    }
   };
+
+  // Dim nodes not on the path when focused
+  const dimmed = focused && !isInPath;
 
   return (
     <div className="component-node">
       <div
-        className={`comp-item ${isSelected ? 'selected' : ''}`}
+        className={`comp-item ${isSelected ? 'selected' : ''} ${dimmed ? 'dimmed' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 6}px` }}
         onClick={handleClick}
       >
@@ -180,8 +182,8 @@ export default function ComponentTree({ tree, selectedId, onSelect }: ComponentT
         {focused && (
           <button
             className="clear-selection-btn"
-            onClick={() => onSelect(null as any)}
-            title="Clear selection"
+            onClick={(e) => { e.stopPropagation(); onSelect(null); }}
+            title="Clear selection — show full tree"
           >
             ×
           </button>
