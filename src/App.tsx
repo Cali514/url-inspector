@@ -109,8 +109,8 @@ export default function App() {
           <CodeViewer file={selectedFile} collapsed={designMode} />
           <ResizableSplit
             direction="vertical"
-            initialSizes={[0.55, 0.45]}
-            minSizes={[0.2, 0.15]}
+            initialSizes={designMode ? [0.22, 0.78] : [0.55, 0.45]}
+            minSizes={[0.1, 0.2]}
             className="right-column-split"
           >
             <ComponentTree
