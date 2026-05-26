@@ -23,7 +23,6 @@ function formatHtml(html) {
   try {
     const dom = new JSDOM(html, { contentType: 'text/html' });
     const serialized = dom.serialize();
-    // Add newlines before opening tags and after closing tags for readability
     return serialized
       .replace(/></g, '>\n<')
       .replace(/\n\n+/g, '\n')
@@ -33,30 +32,106 @@ function formatHtml(html) {
   }
 }
 
+// Validate and normalize URL
+function validateUrl(input) {
+  try {
+    const parsed = new URL(input);
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { valid: false, error: 'Only http:// and https:// URLs are supported' };
+    }
+    return { valid: true, url: parsed.href };
+  } catch {
+    // Try prepending https:// if missing scheme
+    try {
+      const withScheme = new URL('https://' + input);
+      return { valid: true, url: withScheme.href };
+    } catch {
+      return { valid: false, error: 'Invalid URL format' };
+    }
+  }
+}
+
 // GET /api/fetch?url=<encoded_url> — fetches the URL, returns HTML source
 app.get('/api/fetch', async (req, res) => {
-  const url = req.query.url;
-  if (!url) {
+  const rawUrl = req.query.url;
+  if (!rawUrl) {
     return res.status(400).json({ error: 'Missing url parameter' });
   }
 
+  const validation = validateUrl(rawUrl);
+  if (!validation.valid) {
+    return res.status(400).json({ error: validation.error });
+  }
+
+  const url = validation.url;
+
+  // Timeout controller — 15s total
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
   try {
     const response = await fetch(url, {
+      signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity', // Avoid compressed responses that might cause issues
+        'Cache-Control': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
       },
       redirect: 'follow',
+      follow: 10,
     });
 
+    clearTimeout(timeout);
+
     if (!response.ok) {
-      return res.status(response.status).json({ error: `HTTP ${response.status}: ${response.statusText}` });
+      return res.status(response.status).json({
+        error: `HTTP ${response.status}: ${response.statusText}`,
+        url: response.url,
+      });
     }
 
+    const contentType = response.headers.get('content-type') || '';
     const html = await response.text();
     const formatted = formatHtml(html);
-    res.json({ html: formatted, url: response.url, status: response.status });
+
+    res.json({
+      html: formatted,
+      url: response.url,
+      status: response.status,
+      contentType,
+    });
   } catch (err) {
+    clearTimeout(timeout);
+
+    if (err.name === 'AbortError') {
+      return res.status(504).json({ error: 'Request timed out (15s limit)' });
+    }
+
+    // DNS / connection errors
+    if (err.cause?.code === 'ENOTFOUND') {
+      return res.status(502).json({ error: `DNS lookup failed: ${err.cause.hostname || url}` });
+    }
+    if (err.cause?.code === 'ECONNREFUSED') {
+      return res.status(502).json({ error: 'Connection refused by target server' });
+    }
+    if (err.cause?.code === 'ECONNRESET') {
+      return res.status(502).json({ error: 'Connection reset by target server' });
+    }
+    if (err.cause?.code === 'CERT_HAS_EXPIRED') {
+      return res.status(502).json({ error: 'SSL certificate expired — the site\'s HTTPS cert is invalid' });
+    }
+    if (err.cause?.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || err.cause?.code === 'CERT_SIGNATURE_FAILURE') {
+      return res.status(502).json({ error: 'SSL certificate verification failed' });
+    }
+
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });
   }
@@ -76,7 +151,7 @@ app.post('/api/parse', (req, res) => {
     const inlineScripts = [];
 
     // Extract <link> CSS
-    const linkRegex = /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["'][^>]*>/gi;
+    const linkRegex = /<link[^>]+rel=[\"']stylesheet[\"'][^>]+href=[\"']([^\"']+)[\"'][^>]*>/gi;
     let match;
     while ((match = linkRegex.exec(html)) !== null) {
       const href = match[1];
@@ -85,7 +160,7 @@ app.post('/api/parse', (req, res) => {
     }
 
     // Extract <script src>
-    const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["'][^>]*>/gi;
+    const scriptSrcRegex = /<script[^>]+src=[\"']([^\"']+)[\"'][^>]*>/gi;
     while ((match = scriptSrcRegex.exec(html)) !== null) {
       const src = match[1];
       const name = src.split('/').pop()?.split('?')[0] || 'script.js';
@@ -120,9 +195,8 @@ app.post('/api/parse', (req, res) => {
 
         function walk(el) {
           if (!el) return null;
-          // Skip comments and processing instructions
-          if (el.nodeType === 8) return null; // Comment
-          if (el.nodeType === 3 || el.nodeType === 4) { // Text or CDATA
+          if (el.nodeType === 8) return null;
+          if (el.nodeType === 3 || el.nodeType === 4) {
             const text = el.textContent?.trim();
             if (!text) return null;
             return {
@@ -135,7 +209,7 @@ app.post('/api/parse', (req, res) => {
               inlineStyle: '',
             };
           }
-          if (el.nodeType !== 1) return null; // Not element
+          if (el.nodeType !== 1) return null;
 
           const tag = el.tagName?.toLowerCase() || '';
           if (skipTags.has(tag) || skipTags.has(el.nodeName)) return null;
