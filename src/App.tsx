@@ -18,6 +18,8 @@ export default function App() {
   const [selectedComponent, setSelectedComponent] = useState<ComponentNode | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string>('');
 
+  const designMode = selectedComponent !== null;
+
   const handleScan = useCallback(async (url: string) => {
     setLoading(true);
     setError(null);
@@ -35,7 +37,6 @@ export default function App() {
         parsed = await parseHtml(fetchResult.html);
         console.log('[App] Parse success, component tree nodes:', parsed.componentTree?.length);
       } catch (parseErr) {
-        // If server parse fails, build minimal structure on client
         console.warn('[App] Parse failed, falling back to empty tree:', parseErr);
         parsed = {
           fileTree: { cssFiles: [], jsFiles: [], inlineStyles: [], inlineScripts: [] },
@@ -47,7 +48,6 @@ export default function App() {
       setFiles(fileTree);
       setComponentTree(parsed.componentTree);
 
-      // Auto-select the HTML file
       if (fileTree.length > 0 && fileTree[0].type === 'file') {
         setSelectedFile(fileTree[0]);
       }
@@ -58,6 +58,14 @@ export default function App() {
       setLoading(false);
     }
   }, []);
+
+  const handleSelectComponent = useCallback((node: ComponentNode | null) => {
+    setSelectedComponent(node);
+  }, []);
+
+  // Dynamic split sizes: when design mode, middle collapses to thin bar
+  const horizontalSizes = designMode ? [0.2, 0.03, 0.77] : [0.2, 0.45, 0.35];
+  const horizontalMinSizes = designMode ? [0.12, 0.01, 0.3] : [0.12, 0.15, 0.15];
 
   return (
     <div className={`app ${viewport.type}`}>
@@ -90,15 +98,15 @@ export default function App() {
       <div className="workspace">
         <ResizableSplit
           direction="horizontal"
-          initialSizes={selectedComponent ? [0.2, 0.03, 0.77] : [0.2, 0.45, 0.35]}
-          minSizes={[0.12, 0.02, 0.15]}
+          initialSizes={horizontalSizes}
+          minSizes={horizontalMinSizes}
         >
           <FileTree
             files={files}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
           />
-          <CodeViewer file={selectedFile} collapsed={!!selectedComponent} />
+          <CodeViewer file={selectedFile} collapsed={designMode} />
           <ResizableSplit
             direction="vertical"
             initialSizes={[0.55, 0.45]}
@@ -108,7 +116,7 @@ export default function App() {
             <ComponentTree
               tree={componentTree}
               selectedId={selectedComponent?.id ?? null}
-              onSelect={setSelectedComponent}
+              onSelect={handleSelectComponent}
             />
             <DesignTool selectedNode={selectedComponent} />
           </ResizableSplit>

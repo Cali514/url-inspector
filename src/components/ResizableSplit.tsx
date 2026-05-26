@@ -16,9 +16,17 @@ export default function ResizableSplit({
   className = '',
 }: ResizableSplitProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [sizes, setSizes] = useState(initialSizes || children.map(() => 1 / children.length));
+  const defaultSizes = children.map(() => 1 / children.length);
+  const [sizes, setSizes] = useState(initialSizes || defaultSizes);
   const draggingIndex = useRef<number | null>(null);
   const startRef = useRef({ x: 0, sizes: [] as number[] });
+
+  // Re-initialize sizes when initialSizes prop changes
+  useEffect(() => {
+    if (initialSizes) {
+      setSizes(initialSizes);
+    }
+  }, [initialSizes]);
 
   const getMinSize = (i: number) => (minSizes ? minSizes[i] : 0.08);
 

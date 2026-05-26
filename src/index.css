@@ -490,6 +490,46 @@ body {
   max-height: 36px;
   overflow: hidden;
   flex: none !important;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Focus badge in component header */
+.focus-badge {
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  color: var(--accent-sky);
+  background: rgba(56, 189, 248, 0.1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.clear-selection-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 14px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+  padding: 0;
+}
+.clear-selection-btn:hover {
+  color: var(--accent-rose);
+  border-color: var(--accent-rose);
+  background: rgba(248, 113, 113, 0.1);
 }
 
 .code-content {

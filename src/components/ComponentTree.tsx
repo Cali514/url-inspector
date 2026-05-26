@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { ComponentNode } from '../types';
 
 interface ComponentTreeProps {
@@ -7,16 +7,77 @@ interface ComponentTreeProps {
   onSelect: (node: ComponentNode) => void;
 }
 
-function ComponentNodeItem({ node, depth, selectedId, onSelect }: {
+// Build a Set of node IDs that are on the path from root to the selected node
+function findAncestorPath(tree: ComponentNode[], targetId: string): Set<string> {
+  const path = new Set<string>();
+
+  function walk(nodes: ComponentNode[]): boolean {
+    for (const node of nodes) {
+      if (node.id === targetId) {
+        path.add(node.id);
+        return true;
+      }
+      if (node.children && walk(node.children)) {
+        path.add(node.id);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  walk(tree);
+  return path;
+}
+
+// Find a node and its parent in the tree
+function findNodeAndParent(
+  nodes: ComponentNode[],
+  targetId: string,
+  parent: ComponentNode | null = null
+): { node: ComponentNode; parent: ComponentNode | null } | null {
+  for (const n of nodes) {
+    if (n.id === targetId) return { node: n, parent };
+    if (n.children) {
+      const result = findNodeAndParent(n.children, targetId, n);
+      if (result) return result;
+    }
+  }
+  return null;
+}
+
+function ComponentNodeItem({
+  node,
+  depth,
+  selectedId,
+  onSelect,
+  ancestorPath,
+  focused,
+}: {
   node: ComponentNode;
   depth: number;
   selectedId: string | null;
   onSelect: (node: ComponentNode) => void;
+  ancestorPath: Set<string>;
+  focused: boolean;
 }) {
+  // In focused mode, only nodes on the ancestor path stay open
+  const isInPath = ancestorPath.has(node.id);
   const [isOpen, setIsOpen] = useState(depth < 3);
+
+  // Sync open state when focus mode changes
+  useEffect(() => {
+    if (focused) {
+      setIsOpen(isInPath);
+    }
+  }, [focused, isInPath]);
 
   const isSelected = selectedId === node.id;
   const hasChildren = node.children && node.children.length > 0;
+
+  // In focused mode, skip rendering nodes not on the path
+  if (focused && !isInPath) {
+    return null;
+  }
 
   const getTagColor = (tag: string) => {
     if (tag.startsWith('#')) return '#94a3b8';
@@ -78,6 +139,8 @@ function ComponentNodeItem({ node, depth, selectedId, onSelect }: {
           depth={depth + 1}
           selectedId={selectedId}
           onSelect={onSelect}
+          ancestorPath={ancestorPath}
+          focused={focused}
         />
       ))}
     </div>
@@ -85,6 +148,18 @@ function ComponentNodeItem({ node, depth, selectedId, onSelect }: {
 }
 
 export default function ComponentTree({ tree, selectedId, onSelect }: ComponentTreeProps) {
+  const focused = selectedId !== null;
+
+  const ancestorPath = useMemo(() => {
+    if (!selectedId) return new Set<string>();
+    return findAncestorPath(tree, selectedId);
+  }, [tree, selectedId]);
+
+  const selectedInfo = useMemo(() => {
+    if (!selectedId) return null;
+    return findNodeAndParent(tree, selectedId);
+  }, [tree, selectedId]);
+
   return (
     <div className="component-tree">
       <div className="pane-header">
@@ -95,6 +170,22 @@ export default function ComponentTree({ tree, selectedId, onSelect }: ComponentT
           <rect x="14" y="14" width="7" height="7" />
         </svg>
         <span>Components</span>
+        {focused && selectedInfo && (
+          <span className="focus-badge">
+            {selectedInfo.parent
+              ? `<${selectedInfo.parent.tag}> → <${selectedInfo.node.tag}>`
+              : `<${selectedInfo.node.tag}>`}
+          </span>
+        )}
+        {focused && (
+          <button
+            className="clear-selection-btn"
+            onClick={() => onSelect(null as any)}
+            title="Clear selection"
+          >
+            ×
+          </button>
+        )}
       </div>
       <div className="comp-tree-content">
         {tree.length === 0 ? (
@@ -109,6 +200,8 @@ export default function ComponentTree({ tree, selectedId, onSelect }: ComponentT
               depth={0}
               selectedId={selectedId}
               onSelect={onSelect}
+              ancestorPath={ancestorPath}
+              focused={focused}
             />
           ))
         )}
